@@ -19,8 +19,8 @@ public class EventDAO {
     public boolean createEvent(Event event) {
         // The SQL Insert Statement
         String query = "INSERT INTO events (organizer_id, title, description, department_club, " +
-                       "event_date, location, capacity, available_seats, category, event_type, status) " +
-                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')";
+                       "event_date, location, capacity, available_seats, category, event_type, image_url, status) " +
+                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
@@ -41,6 +41,7 @@ public class EventDAO {
             
             stmt.setString(9, event.getCategory());
             stmt.setString(10, event.getEventType());
+            stmt.setString(11, event.getImageUrl());
 
             int rowsAffected = stmt.executeUpdate();
             return rowsAffected > 0;
@@ -79,7 +80,7 @@ public class EventDAO {
                 event.setAvailableSeats(rs.getInt("available_seats"));
                 event.setCategory(rs.getString("category"));
                 event.setStatus(rs.getString("status"));
-                
+                event.setImageUrl(rs.getString("image_url"));
                 events.add(event);
             }
         } catch (SQLException e) {
@@ -129,6 +130,7 @@ public class EventDAO {
                 event.setAvailableSeats(rs.getInt("available_seats"));
                 event.setCategory(rs.getString("category"));
                 event.setStatus(rs.getString("status"));
+                event.setImageUrl(rs.getString("image_url"));
                 return event;
             }
         } catch (SQLException e) {
@@ -139,9 +141,8 @@ public class EventDAO {
 
     // UPDATE AN EXISTING EVENT
     public boolean updateEvent(Event event) {
-        // NOT updating capacity, available_seats, or event_type to protect database integrity!
         String query = "UPDATE events SET title = ?, description = ?, department_club = ?, " +
-                       "event_date = ?, location = ?, category = ?, status = ? " +
+                       "event_date = ?, location = ?, category = ?, status = ?, image_url = ? " +
                        "WHERE id = ? AND organizer_id = ?";
 
         try (Connection conn = DBConnection.getConnection();
@@ -154,8 +155,9 @@ public class EventDAO {
             stmt.setString(5, event.getLocation());
             stmt.setString(6, event.getCategory());
             stmt.setString(7, event.getStatus());
-            stmt.setInt(8, event.getId());
-            stmt.setInt(9, event.getOrganizerId());
+            stmt.setString(8, event.getImageUrl());   // Save the updated image path!
+            stmt.setInt(9, event.getId());
+            stmt.setInt(10, event.getOrganizerId());
 
             int rowsAffected = stmt.executeUpdate();
             return rowsAffected > 0;
@@ -196,7 +198,7 @@ public List<Event> getAllOpenEvents() {
                     event.setAvailableSeats(rs.getInt("available_seats"));
                     event.setCategory(rs.getString("category"));
                     event.setStatus(rs.getString("status"));
-                    
+                    event.setImageUrl(rs.getString("image_url"));
                     events.add(event);
                 }
             }
@@ -254,6 +256,7 @@ public List<Event> getAllOpenEvents() {
                 event.setCategory(rs.getString("category"));
                 event.setStatus(rs.getString("status"));
                 event.setStudentRating(rs.getInt("rating"));
+                event.setImageUrl(rs.getString("image_url"));
                 events.add(event);
             }
         } catch (SQLException e) {
@@ -276,6 +279,94 @@ public List<Event> getAllOpenEvents() {
             int rowsAffected = stmt.executeUpdate();
             return rowsAffected > 0;
             
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    // FETCH ALL EVENTS FOR ADMIN (No filters)
+    public java.util.List<Event> getAllEventsForAdmin() {
+        java.util.List<Event> events = new java.util.ArrayList<>();
+        String query = "SELECT * FROM events ORDER BY event_date DESC";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                Event event = EventFactory.createEvent(rs.getString("event_type"));
+                event.setId(rs.getInt("id"));
+                event.setOrganizerId(rs.getInt("organizer_id"));
+                event.setTitle(rs.getString("title"));
+                event.setDepartmentClub(rs.getString("department_club"));
+                event.setEventDate(rs.getTimestamp("event_date").toLocalDateTime());
+                event.setStatus(rs.getString("status"));
+                events.add(event);
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return events;
+    }
+    // FETCH A SINGLE EVENT FOR ADMIN (Ignores Organizer ID security check)
+    public Event getEventByIdForAdmin(int eventId) {
+        String query = "SELECT * FROM events WHERE id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setInt(1, eventId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                Event event = EventFactory.createEvent(rs.getString("event_type"));
+                event.setId(rs.getInt("id"));
+                event.setOrganizerId(rs.getInt("organizer_id"));
+                event.setTitle(rs.getString("title"));
+                event.setDescription(rs.getString("description"));
+                event.setDepartmentClub(rs.getString("department_club"));
+                event.setEventDate(rs.getTimestamp("event_date").toLocalDateTime());
+                event.setLocation(rs.getString("location"));
+                event.setCapacity(rs.getInt("capacity"));
+                event.setAvailableSeats(rs.getInt("available_seats"));
+                event.setCategory(rs.getString("category"));
+                event.setStatus(rs.getString("status"));
+                event.setImageUrl(rs.getString("image_url"));
+                return event;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return null;
+    }
+    // UPDATE EVENT FOR ADMIN (Ignores the organizer_id security lock)
+    public boolean updateEventForAdmin(Event event) {
+        String query = "UPDATE events SET title = ?, description = ?, department_club = ?, " +
+                       "event_date = ?, location = ?, category = ?, status = ?, image_url = ? " +
+                       "WHERE id = ?"; // we removed "AND organizer_id = ?"
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+
+            stmt.setString(1, event.getTitle());
+            stmt.setString(2, event.getDescription());
+            stmt.setString(3, event.getDepartmentClub());
+            stmt.setTimestamp(4, java.sql.Timestamp.valueOf(event.getEventDate()));
+            stmt.setString(5, event.getLocation());
+            stmt.setString(6, event.getCategory());
+            stmt.setString(7, event.getStatus());
+            stmt.setString(8, event.getImageUrl());
+            stmt.setInt(9, event.getId()); // Just the Event ID!
+
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    // DELETE EVENT FOR ADMIN (Ignores the organizer_id security lock)
+    public boolean deleteEventForAdmin(int eventId) {
+        String query = "DELETE FROM events WHERE id = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+
+            stmt.setInt(1, eventId);
+            return stmt.executeUpdate() > 0;
+
         } catch (SQLException e) {
             e.printStackTrace();
             return false;

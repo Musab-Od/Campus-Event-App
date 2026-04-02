@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 
 import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,11 @@ import com.eventapp.model.User;
 import com.eventapp.dao.EventDAO;
 
 @WebServlet("/create-event")
+@MultipartConfig(
+    fileSizeThreshold = 1024 * 1024 * 1,  // 1 MB buffer
+    maxFileSize = 1024 * 1024 * 5,       // 5 MB max per file
+    maxRequestSize = 1024 * 1024 * 10    // 10 MB total request size
+)
 public class CreateEventServlet extends HttpServlet {
     
     private EventDAO eventDAO = new EventDAO();
@@ -45,54 +51,68 @@ public class CreateEventServlet extends HttpServlet {
 
     // Process the Form Submission
     @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) 
-            throws ServletException, IOException {
+protected void doPost(HttpServletRequest request, HttpServletResponse response) 
+        throws ServletException, IOException {
+    
+    HttpSession session = request.getSession();
+    User organizer = (User) session.getAttribute("user");
+
+    // 1. Handle File Upload FIRST
+    jakarta.servlet.http.Part filePart = request.getPart("image"); 
+    String fileName = filePart.getSubmittedFileName();
+    String savedPath = "uploads/default.jpg"; // Fallback image
+
+    if (fileName != null && !fileName.isEmpty()) {
+        // Create a unique name to prevent overwriting
+        String uniqueName = System.currentTimeMillis() + "_" + fileName;
         
-        // Grab the logged-in organizer from the session
-        HttpSession session = request.getSession();
-        User organizer = (User) session.getAttribute("user");
-
-        // 1. Grab all the text from the HTML form
-        String title = request.getParameter("title");
-        String description = request.getParameter("description");
-        String departmentClub = request.getParameter("departmentClub");
-        String location = request.getParameter("location");
-        int capacity = Integer.parseInt(request.getParameter("capacity"));
-        String category = request.getParameter("category");
-        String eventType = request.getParameter("eventType");
+        // Find where the project is running on your computer
+        String appPath = request.getServletContext().getRealPath("");
+        String savePath = appPath + java.io.File.separator + "uploads";
         
-        // The HTML form sends date/time as a String. We parse it to Java's LocalDateTime.
-        String eventDateStr = request.getParameter("eventDate");
-        LocalDateTime eventDate = LocalDateTime.parse(eventDateStr);
+        // Create the folder if it's missing
+        java.io.File fileSaveDir = new java.io.File(savePath);
+        if (!fileSaveDir.exists()) fileSaveDir.mkdir();
 
-        try {
-            // 2. We hand the string to the Factory, and it gives us the right object.
-            Event newEvent = EventFactory.createEvent(eventType);
-            
-            // 3. Fill the container with the rest of the data
-            newEvent.setOrganizerId(organizer.getId());
-            newEvent.setTitle(title);
-            newEvent.setDescription(description);
-            newEvent.setDepartmentClub(departmentClub);
-            newEvent.setLocation(location);
-            newEvent.setCapacity(capacity);
-            newEvent.setCategory(category);
-            newEvent.setEventDate(eventDate);
-            
-            // 4. Save to Database using the DAO
-            boolean isCreated = eventDAO.createEvent(newEvent);
-            
-            if (isCreated) {
-                // Success! Send them to the dashboard
-                response.sendRedirect(request.getContextPath() + "/dashboard?success=eventCreated");
-            } else {
-                request.setAttribute("errorMessage", "Database error. Could not create event.");
-                request.getRequestDispatcher("/WEB-INF/views/create-event.jsp").forward(request, response);
-            }
+        // Save the actual file to the hard drive
+        filePart.write(savePath + java.io.File.separator + uniqueName);
+        
+        // This is the path we put in the DB
+        savedPath = "uploads/" + uniqueName;
+    }
 
-        } catch (IllegalArgumentException e) {
-            request.setAttribute("errorMessage", "Invalid Event Type selected.");
+    // 2. Grab the rest of the text fields
+    String title = request.getParameter("title");
+    String description = request.getParameter("description");
+    String departmentClub = request.getParameter("departmentClub");
+    String location = request.getParameter("location");
+    int capacity = Integer.parseInt(request.getParameter("capacity"));
+    String category = request.getParameter("category");
+    String eventType = request.getParameter("eventType");
+    LocalDateTime eventDate = LocalDateTime.parse(request.getParameter("eventDate"));
+
+    try {
+        Event newEvent = EventFactory.createEvent(eventType);
+        newEvent.setOrganizerId(organizer.getId());
+        newEvent.setTitle(title);
+        newEvent.setDescription(description);
+        newEvent.setDepartmentClub(departmentClub);
+        newEvent.setLocation(location);
+        newEvent.setCapacity(capacity);
+        newEvent.setCategory(category);
+        newEvent.setEventDate(eventDate);
+        
+        // 3. Set the Image URL
+        newEvent.setImageUrl(savedPath); 
+
+        if (eventDAO.createEvent(newEvent)) {
+            response.sendRedirect(request.getContextPath() + "/dashboard?success=eventCreated");
+        } else {
+            request.setAttribute("errorMessage", "Database error.");
             request.getRequestDispatcher("/WEB-INF/views/create-event.jsp").forward(request, response);
         }
+    } catch (Exception e) {
+        e.printStackTrace();
     }
+}
 }

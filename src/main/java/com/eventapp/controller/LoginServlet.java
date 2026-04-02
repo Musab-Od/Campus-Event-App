@@ -39,11 +39,16 @@ public class LoginServlet extends HttpServlet {
             HttpSession session = request.getSession();
             session.setAttribute("user", loggedInUser);
             
-            // Redirect them to a dashboard (we will build this later)
-            response.sendRedirect(request.getContextPath() + "/dashboard");
+            // NEW: ADMIN REDIRECTION LOGIC
+            if ("ADMIN".equals(loggedInUser.getRole())) {
+                response.sendRedirect(request.getContextPath() + "/admin-dashboard");
+            } else {
+                // Redirect regular users to standard dashboard
+                response.sendRedirect(request.getContextPath() + "/dashboard");
+            }
         } else {
             // FAILED! Wrong password or blocked user
-            request.setAttribute("errorMessage", "Invalid email or password.");
+            request.setAttribute("errorMessage", "Invalid email/password, or your account has been blocked.");
             request.getRequestDispatcher("/WEB-INF/views/login.jsp").forward(request, response);
         }
     }

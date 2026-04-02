@@ -98,6 +98,10 @@
         <div class="row">
         <% for(Event e : openEvents) { %>
             <div class="col-md-4 mb-4">
+                        <img src="${pageContext.request.contextPath}/<%= e.getImageUrl() != null ? e.getImageUrl() : "uploads/default.jpg" %>" 
+         class="card-img-top border-bottom" 
+         alt="Event Poster" 
+         style="height: 200px; object-fit: cover; background-color: #f8f9fa;">
                 <div class="card h-100 shadow-sm border-0 bg-white">
                     <div class="card-body">
                         <span class="badge bg-secondary mb-2"><%= e.getCategory() %></span>

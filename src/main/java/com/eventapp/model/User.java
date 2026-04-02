@@ -9,6 +9,7 @@ public class User {
     private String department;
     private int admissionYear;
     private String role; // STUDENT, ORGANIZER, or ADMIN
+    private boolean isBlocked;
 
     // Empty Constructor
     public User() {}
@@ -36,67 +37,30 @@ public class User {
         this.role = role;
     }
 
-    public int getId() {
-        return id;
-    }
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
 
-    public void setId(int id) {
-        this.id = id;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
-    public String getName() {
-        return name;
-    }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
 
-    public String getEmail() {
-        return email;
-    }
+    public String getFaculty() { return faculty; }
+    public void setFaculty(String faculty) { this.faculty = faculty; }
 
-    public void setEmail(String email) {
-        this.email = email;
-    }
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
 
-    public String getPassword() {
-        return password;
-    }
+    public int getAdmissionYear() { return admissionYear; }
+    public void setAdmissionYear(int admissionYear) { this.admissionYear = admissionYear; }
 
-    public void setPassword(String password) {
-        this.password = password;
-    }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
 
-    public String getFaculty() {
-        return faculty;
-    }
-
-    public void setFaculty(String faculty) {
-        this.faculty = faculty;
-    }
-
-    public String getDepartment() {
-        return department;
-    }
-
-    public void setDepartment(String department) {
-        this.department = department;
-    }
-
-    public int getAdmissionYear() {
-        return admissionYear;
-    }
-
-    public void setAdmissionYear(int admissionYear) {
-        this.admissionYear = admissionYear;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
+    public boolean isBlocked() { return isBlocked; }
+    public void setBlocked(boolean isBlocked) { this.isBlocked = isBlocked; }
 }

@@ -10,9 +10,9 @@
 
 <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container">
-        <a class="navbar-brand" href="#">Campus Events Dashboard</a>
+        <a class="navbar-brand" id="backToDash" href="${pageContext.request.contextPath}/dashboard">⬅ Back to Dashboard</a>
         <span class="navbar-text text-white">
-            Logged in as Organizer: ${sessionScope.user.name}
+            Organizer: ${sessionScope.user.name}
         </span>
     </div>
 </nav>
@@ -30,7 +30,7 @@
                         <div class="alert alert-danger"><%= request.getAttribute("errorMessage") %></div>
                     <% } %>
 
-                    <form action="${pageContext.request.contextPath}/create-event" method="POST">
+                    <form id="createEventForm" action="${pageContext.request.contextPath}/create-event" method="POST" enctype="multipart/form-data">
                         
                         <div class="mb-3">
                             <label class="form-label">Event Title</label>
@@ -85,14 +85,35 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="mb-3">
+        <label class="form-label">Event Poster (Max 5MB)</label>
+        <input type="file" name="image" class="form-control" accept="image/*">
+    </div>
 
-                        <button type="submit" class="btn btn-primary w-100">Create Event</button>
+                        <button type="submit" id="submitBtn" class="btn btn-primary w-100">Create Event</button>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    let formChanged = false;
+    const form = document.getElementById('createEventForm');
+    
+    form.addEventListener('input', () => formChanged = true);
+
+    document.getElementById('backToDash').addEventListener('click', function(e) {
+        if (formChanged) {
+            if (!confirm("Are you sure you want to leave? Your information will be lost.")) {
+                e.preventDefault();
+            }
+        }
+    });
+
+    document.getElementById('submitBtn').addEventListener('click', () => formChanged = false);
+</script>
 
 </body>
 </html>

@@ -10,7 +10,10 @@
 
 <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container">
-        <a class="navbar-brand" href="${pageContext.request.contextPath}/dashboard">Campus Events Dashboard</a>
+<a class="navbar-brand exit-link" id="backToDash" 
+   href="${pageContext.request.contextPath}${sessionScope.user.role == 'ADMIN' ? '/admin-dashboard' : '/dashboard'}">
+   ⬅ Back to Dashboard
+</a>
     </div>
 </nav>
 
@@ -22,7 +25,7 @@
                     <h4 class="mb-0">Edit Event: ${event.title}</h4>
                 </div>
                 <div class="card-body">
-                    <form action="${pageContext.request.contextPath}/edit-event" method="POST">
+                    <form id="editEventForm" action="${pageContext.request.contextPath}/edit-event" method="POST" enctype="multipart/form-data">
                         
                         <input type="hidden" name="id" value="${event.id}">
 
@@ -78,14 +81,39 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="mb-3">
+        <label class="form-label">Event Poster (Max 5MB)</label>
+        <input type="file" name="image" class="form-control" accept="image/*">
+    </div>
 
-                        <button type="submit" class="btn btn-warning w-100">Save Changes</button>
+                        <button type="submit" id="submitBtn" class="btn btn-warning w-100">Save Changes</button>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    let formChanged = false;
+    const form = document.getElementById('editEventForm');
+    
+    // Track any changes in the form
+    form.addEventListener('input', () => formChanged = true);
+
+    // The Back button logic
+    document.getElementById('backToDash').addEventListener('click', function(e) {
+        if (formChanged) {
+            const leave = confirm("Are you sure you want to leave? Your edited information will be lost.");
+            if (!leave) {
+                e.preventDefault(); // Stop the link from working
+            }
+        }
+    });
+
+    // Make sure we don't show the warning if they are actually submitting the form
+    document.getElementById('submitBtn').addEventListener('click', () => formChanged = false);
+</script>
 
 </body>
 </html>
