@@ -12,3 +12,5 @@ Thumbs.db
 
 # Compiled files
 *.class
+
+src/main/java/com/eventapp/util/DBConnection.java
