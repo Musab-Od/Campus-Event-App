@@ -25,7 +25,8 @@
             </ul>
         </div>
         <div class="d-flex text-white align-items-center">
-            <span class="me-3">${sessionScope.user.name} (Student)</span>
+            <span class="me-3">Welcome, ${sessionScope.user.name} (Student)</span>
+            <a href="${pageContext.request.contextPath}/profile" class="btn btn-sm btn-info me-2 text-white">Profile</a>
             <a href="${pageContext.request.contextPath}/logout" class="btn btn-sm btn-outline-light">Logout</a>
         </div>
     </div>
@@ -45,12 +46,42 @@
     <% if("alreadyBooked".equals(request.getParameter("error"))) { %>
         <div class="alert alert-warning">You have already reserved a ticket for this event!</div>
     <% } %>
+    <% if("timeConflict".equals(request.getParameter("error"))) { %>
+        <div class="alert alert-danger fw-bold">
+            ⚠️ Booking Failed: You already have a ticket for another event happening at this exact same time!
+        </div>
+    <% } %>
 
     <div class="mb-4">
         <h2>Upcoming Campus Events</h2>
         <p class="text-muted">Browse and reserve your spot for workshops, seminars, and club activities.</p>
     </div>
-
+    <div class="card shadow-sm mb-4 border-0 bg-white">
+    <div class="card-body">
+        <form action="${pageContext.request.contextPath}/dashboard" method="GET" class="row g-2">
+            <div class="col-md-3">
+                <select name="filterType" class="form-select">
+                    <option value="" disabled selected>Select Filter...</option>
+                    <option value="title">Search by Title</option>
+                    <option value="category">Category (Educational, Social...)</option>
+                    <option value="department">Department/Club</option>
+                    <option value="type">Event Type (Workshop, Seminar...)</option>
+                    <option value="date">Date (YYYY-MM-DD)</option>
+                    <option value="availability">Show Available Only</option>
+                </select>
+            </div>
+            <div class="col-md-7">
+                <input type="text" name="query" class="form-control" placeholder="Type your search here...">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">🔍 Search</button>
+            </div>
+        </form>
+        <div class="mt-2 text-end">
+            <a href="${pageContext.request.contextPath}/dashboard" class="text-decoration-none small text-muted">Clear Filters</a>
+        </div>
+    </div>
+</div>
     <%
         List<Event> openEvents = (List<Event>) request.getAttribute("openEvents");
         Set<Integer> bookedIds = (Set<Integer>) request.getAttribute("bookedIds");

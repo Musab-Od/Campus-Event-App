@@ -33,6 +33,13 @@
 
 <div class="container mt-5">
     
+    <% if("rated".equals(request.getParameter("success"))) { %>
+        <div class="alert alert-success">Thank you for rating the event!</div>
+    <% } %>
+    <% if("ratingFailed".equals(request.getParameter("error"))) { %>
+        <div class="alert alert-danger">Failed to submit your rating. Please try again.</div>
+    <% } %>
+
     <div class="mb-4">
         <h2>My Ticket Reservations</h2>
         <p class="text-muted">Manage your upcoming event attendance here.</p>
@@ -53,7 +60,6 @@
         <% 
             LocalDateTime now = LocalDateTime.now();
             for(Event e : myTickets) { 
-                // We check the time in the UI to decide whether to show the Cancel button!
                 boolean canCancel = e.getEventDate().isAfter(now);
         %>
             <div class="col-md-6 mb-4">
@@ -71,16 +77,42 @@
                         <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
                             <small class="text-muted">ID: #EVT-<%= e.getId() %></small>
                             
-                            <% if(canCancel) { %>
-                                <form action="${pageContext.request.contextPath}/cancel-ticket" method="POST" class="m-0">
-                                    <input type="hidden" name="eventId" value="<%= e.getId() %>">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to cancel your ticket? This will release your seat.');">
-                                        Cancel Reservation
-                                    </button>
-                                </form>
+                            <% if ("COMPLETED".equals(e.getStatus()) || "EXPIRED".equals(e.getStatus())) { %>
+                                <% if (e.getStudentRating() > 0) { %>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-success me-2">Rated</span>
+                                        <div class="text-warning fw-bold fs-5">
+                                            <% for(int i=0; i<e.getStudentRating(); i++) { %>★<% } %><% for(int i=e.getStudentRating(); i<5; i++) { %>☆<% } %>
+                                        </div>
+                                    </div>
+                                <% } else { %>
+                                    <form action="${pageContext.request.contextPath}/rate-event" method="POST" class="d-flex align-items-center gap-2 m-0">
+                                        <input type="hidden" name="eventId" value="<%= e.getId() %>">
+                                        <select name="rating" class="form-select form-select-sm" required style="width: 120px;">
+                                            <option value="" disabled selected>Rate...</option>
+                                            <option value="5">5 - Excellent</option>
+                                            <option value="4">4 - Good</option>
+                                            <option value="3">3 - Okay</option>
+                                            <option value="2">2 - Poor</option>
+                                            <option value="1">1 - Terrible</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-warning">Submit</button>
+                                    </form>
+                                <% } %>
+
                             <% } else { %>
-                                <span class="text-muted fst-italic small">Event has started (Cannot cancel)</span>
+                                <% if(canCancel) { %>
+                                    <form action="${pageContext.request.contextPath}/cancel-ticket" method="POST" class="m-0">
+                                        <input type="hidden" name="eventId" value="<%= e.getId() %>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to cancel your ticket? This will release your seat.');">
+                                            Cancel Reservation
+                                        </button>
+                                    </form>
+                                <% } else { %>
+                                    <span class="text-muted fst-italic small">Event has started (Cannot cancel)</span>
+                                <% } %>
                             <% } %>
+
                         </div>
                     </div>
                 </div>

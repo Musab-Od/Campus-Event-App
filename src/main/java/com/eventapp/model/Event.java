@@ -17,6 +17,7 @@ public abstract class Event {
     private String eventType; // This will be set by the Factory!
     private String imageUrl;
     private String status;
+    private int studentRating;
 
     // Empty Constructor
     public Event() {}
@@ -127,4 +128,7 @@ public abstract class Event {
     public void setStatus(String status) {
         this.status = status;
     }
+    public int getStudentRating() { return studentRating; }
+
+    public void setStudentRating(int studentRating) { this.studentRating = studentRating; }
 }

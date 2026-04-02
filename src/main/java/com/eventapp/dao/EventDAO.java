@@ -166,47 +166,59 @@ public class EventDAO {
         }
     }
     // FETCH ALL OPEN EVENTS (For the Student Dashboard)
-    public List<Event> getAllOpenEvents() {
+public List<Event> getAllOpenEvents() {
         // Trigger auto-expiration first!
         autoExpireEvents();
         List<Event> events = new ArrayList<>();
+        
         // We only want OPEN events, and we want the soonest ones first!
-        String query = "SELECT * FROM events WHERE status = 'OPEN' AND event_date > NOW() ORDER BY event_date ASC";
+        String query = "SELECT * FROM events WHERE status = 'OPEN' AND event_date > ? ORDER BY event_date ASC";
 
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(query);
-             ResultSet rs = stmt.executeQuery()) {
+             PreparedStatement stmt = conn.prepareStatement(query)) {
 
-            while (rs.next()) {
-                Event event = EventFactory.createEvent(rs.getString("event_type"));
-                
-                event.setId(rs.getInt("id"));
-                event.setOrganizerId(rs.getInt("organizer_id"));
-                event.setTitle(rs.getString("title"));
-                event.setDescription(rs.getString("description"));
-                event.setDepartmentClub(rs.getString("department_club"));
-                event.setEventDate(rs.getTimestamp("event_date").toLocalDateTime());
-                event.setLocation(rs.getString("location"));
-                event.setCapacity(rs.getInt("capacity"));
-                event.setAvailableSeats(rs.getInt("available_seats"));
-                event.setCategory(rs.getString("category"));
-                event.setStatus(rs.getString("status"));
-                
-                events.add(event);
+            // 1. Fill in the '?' FIRST
+            stmt.setTimestamp(1, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now()));
+
+            // 2. THEN execute the query and open the ResultSet
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Event event = EventFactory.createEvent(rs.getString("event_type"));
+                    
+                    event.setId(rs.getInt("id"));
+                    event.setOrganizerId(rs.getInt("organizer_id"));
+                    event.setTitle(rs.getString("title"));
+                    event.setDescription(rs.getString("description"));
+                    event.setDepartmentClub(rs.getString("department_club"));
+                    event.setEventDate(rs.getTimestamp("event_date").toLocalDateTime());
+                    event.setLocation(rs.getString("location"));
+                    event.setCapacity(rs.getInt("capacity"));
+                    event.setAvailableSeats(rs.getInt("available_seats"));
+                    event.setCategory(rs.getString("category"));
+                    event.setStatus(rs.getString("status"));
+                    
+                    events.add(event);
+                }
             }
         } catch (SQLException e) {
+            System.out.println("ERROR IN getAllOpenEvents: " + e.getMessage());
             e.printStackTrace();
         }
         return events;
     }
-    // AUTO-EXPIRE EVENTS THAT HAVE PASSED
+
+// AUTO-EXPIRE EVENTS THAT HAVE PASSED
     public void autoExpireEvents() {
-        // This query finds any OPEN event where the date is in the past, and locks it to EXPIRED
-        String query = "UPDATE events SET status = 'EXPIRED' WHERE status = 'OPEN' AND event_date < NOW()";
+        // We replaced NOW() with ? so the database doesn't use its own incorrect timezone clock
+        String query = "UPDATE events SET status = 'EXPIRED' WHERE status = 'OPEN' AND event_date < ?";
         
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
+             
+            // We hand the database the exact time from your local Java server
+            stmt.setTimestamp(1, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now()));
             stmt.executeUpdate();
+            
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -217,10 +229,10 @@ public class EventDAO {
         
         List<Event> events = new ArrayList<>();
         // We join the tables to only grab events where this specific student has a 'RESERVED' status
-        String query = "SELECT e.* FROM events e " +
-                       "JOIN reservations r ON e.id = r.event_id " +
-                       "WHERE r.student_id = ? AND r.reservation_status = 'RESERVED' " +
-                       "ORDER BY e.event_date ASC";
+            String query = "SELECT e.*, r.rating FROM events e " +
+                   "JOIN reservations r ON e.id = r.event_id " +
+                   "WHERE r.student_id = ? AND r.reservation_status = 'RESERVED' " +
+                   "ORDER BY e.event_date ASC";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
@@ -241,11 +253,32 @@ public class EventDAO {
                 event.setAvailableSeats(rs.getInt("available_seats"));
                 event.setCategory(rs.getString("category"));
                 event.setStatus(rs.getString("status"));
+                event.setStudentRating(rs.getInt("rating"));
                 events.add(event);
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return events;
+    }
+    // // UPDATE EVENT STATUS (Quick toggle for CLOSED / COMPLETED)
+    public boolean updateEventStatus(int eventId, int organizerId, String newStatus) {
+        // We check organizer_id so a hacker can't close someone else's event!
+        String query = "UPDATE events SET status = ? WHERE id = ? AND organizer_id = ?";
+        
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+             
+            stmt.setString(1, newStatus);
+            stmt.setInt(2, eventId);
+            stmt.setInt(3, organizerId);
+            
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }

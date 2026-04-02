@@ -8,30 +8,55 @@ import com.eventapp.util.DBConnection;
 
 public class ReservationDAO {
 
-    public String bookTicket(int eventId, int studentId) {
+public String bookTicket(int eventId, int studentId) {
         
-        String checkDuplicateQuery = "SELECT id FROM reservations WHERE event_id = ? AND student_id = ?";
-        // "FOR UPDATE" locks this row so nobody else can steal the last seat!
+        // 1. Grab the status so we know IF they cancelled before
+        String checkDuplicateQuery = "SELECT reservation_status FROM reservations WHERE event_id = ? AND student_id = ?";
+        
+        String checkTimeConflictQuery = 
+            "SELECT r.id FROM reservations r JOIN events e ON r.event_id = e.id " +
+            "WHERE r.student_id = ? AND r.reservation_status = 'RESERVED' " +
+            "AND e.event_date = (SELECT event_date FROM events WHERE id = ?)";
+
         String checkSeatsQuery = "SELECT available_seats FROM events WHERE id = ? FOR UPDATE";
-        String reserveQuery = "INSERT INTO reservations (event_id, student_id) VALUES (?, ?)";
+        
+        // We now have TWO ways to save the reservation
+        String insertQuery = "INSERT INTO reservations (event_id, student_id, reservation_status) VALUES (?, ?, 'RESERVED')";
+        String reactivateQuery = "UPDATE reservations SET reservation_status = 'RESERVED' WHERE event_id = ? AND student_id = ?";
+        
         String updateEventQuery = "UPDATE events SET available_seats = available_seats - 1 WHERE id = ?";
 
         Connection conn = null;
 
         try {
             conn = DBConnection.getConnection();
-            
-            // 1. START TRANSACTION (Turn off auto-save)
-            conn.setAutoCommit(false); 
+            conn.setAutoCommit(false);
 
-            // 2. CHECK FOR DUPLICATES
+            // 1. CHECK FOR DUPLICATES & PREVIOUS CANCELLATIONS
+            boolean wasCancelled = false;
             try (PreparedStatement checkDupStmt = conn.prepareStatement(checkDuplicateQuery)) {
                 checkDupStmt.setInt(1, eventId);
                 checkDupStmt.setInt(2, studentId);
                 ResultSet rsDup = checkDupStmt.executeQuery();
                 if (rsDup.next()) {
-                    conn.rollback(); // Cancel transaction
-                    return "ALREADY_BOOKED";
+                    String status = rsDup.getString("reservation_status");
+                    if ("RESERVED".equals(status)) {
+                        conn.rollback();
+                        return "ALREADY_BOOKED";
+                    } else if ("CANCELLED".equals(status)) {
+                        wasCancelled = true; // They cancelled before! We will reactivate this row later.
+                    }
+                }
+            }
+
+            // 2. CHECK FOR TIME CONFLICTS
+            try (PreparedStatement checkTimeStmt = conn.prepareStatement(checkTimeConflictQuery)) {
+                checkTimeStmt.setInt(1, studentId);
+                checkTimeStmt.setInt(2, eventId);
+                ResultSet rsTime = checkTimeStmt.executeQuery();
+                if (rsTime.next()) {
+                    conn.rollback();
+                    return "TIME_CONFLICT";
                 }
             }
 
@@ -39,12 +64,10 @@ public class ReservationDAO {
             try (PreparedStatement checkSeatsStmt = conn.prepareStatement(checkSeatsQuery)) {
                 checkSeatsStmt.setInt(1, eventId);
                 ResultSet rsSeats = checkSeatsStmt.executeQuery();
-                
                 if (rsSeats.next()) {
                     int availableSeats = rsSeats.getInt("available_seats");
-                    
                     if (availableSeats <= 0) {
-                        conn.rollback(); // Cancel transaction
+                        conn.rollback();
                         return "SOLD_OUT";
                     }
                 } else {
@@ -53,11 +76,19 @@ public class ReservationDAO {
                 }
             }
 
-            // 4. INSERT THE RESERVATION
-            try (PreparedStatement reserveStmt = conn.prepareStatement(reserveQuery)) {
-                reserveStmt.setInt(1, eventId);
-                reserveStmt.setInt(2, studentId);
-                reserveStmt.executeUpdate();
+            // 4. SAVE THE RESERVATION (Insert new OR Update cancelled)
+            if (wasCancelled) {
+                try (PreparedStatement reactivateStmt = conn.prepareStatement(reactivateQuery)) {
+                    reactivateStmt.setInt(1, eventId);
+                    reactivateStmt.setInt(2, studentId);
+                    reactivateStmt.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement insertStmt = conn.prepareStatement(insertQuery)) {
+                    insertStmt.setInt(1, eventId);
+                    insertStmt.setInt(2, studentId);
+                    insertStmt.executeUpdate();
+                }
             }
 
             // 5. DECREASE THE SEAT COUNT
@@ -66,27 +97,15 @@ public class ReservationDAO {
                 updateEventStmt.executeUpdate();
             }
 
-            // 6. SUCCESS! SAVE THE TRANSACTION
             conn.commit();
             return "SUCCESS";
 
         } catch (SQLException e) {
-            try {
-                if (conn != null) conn.rollback(); // If anything crashes, undo everything!
-            } catch (SQLException ex) {
-                ex.printStackTrace();
-            }
+            try { if (conn != null) conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
             e.printStackTrace();
             return "ERROR";
         } finally {
-            try {
-                if (conn != null) {
-                    conn.setAutoCommit(true);
-                    conn.close();
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
+            try { if (conn != null) { conn.setAutoCommit(true); conn.close(); } } catch (SQLException e) { e.printStackTrace(); }
         }
     }
     // CANCEL A TICKET
@@ -151,6 +170,69 @@ String checkQuery = "SELECT r.id FROM reservations r JOIN events e ON r.event_id
             } catch (SQLException e) {
                 e.printStackTrace();
             }
+        }
+    }
+    // MARK ATTENDANCE (Present or Absent)
+    public boolean updateAttendance(int eventId, int studentId, String attendanceStatus) {
+        // attendanceStatus should be 'PRESENT' or 'ABSENT'
+        String query = "UPDATE reservations SET attendance_status = ? WHERE event_id = ? AND student_id = ?";
+        
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+             
+            stmt.setString(1, attendanceStatus);
+            stmt.setInt(2, eventId);
+            stmt.setInt(3, studentId);
+            
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    // FETCH ALL ATTENDEES FOR AN EVENT
+    public java.util.List<com.eventapp.model.Attendee> getAttendeesForEvent(int eventId) {
+        java.util.List<com.eventapp.model.Attendee> attendees = new java.util.ArrayList<>();
+        
+        // Join users and reservations to get names and statuses!
+        String query = "SELECT u.id, u.name, u.email, r.attendance_status " +
+                       "FROM users u " +
+                       "JOIN reservations r ON u.id = r.student_id " +
+                       "WHERE r.event_id = ? AND r.reservation_status = 'RESERVED'";
+                       
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+             
+            stmt.setInt(1, eventId);
+            ResultSet rs = stmt.executeQuery();
+            
+            while (rs.next()) {
+                attendees.add(new com.eventapp.model.Attendee(
+                    rs.getInt("id"),
+                    rs.getString("name"),
+                    rs.getString("email"),
+                    rs.getString("attendance_status") != null ? rs.getString("attendance_status") : "PENDING"
+                ));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return attendees;
+    }
+    // SAVE STUDENT RATING
+    public boolean rateEvent(int eventId, int studentId, int rating) {
+        String query = "UPDATE reservations SET rating = ? WHERE event_id = ? AND student_id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setInt(1, rating);
+            stmt.setInt(2, eventId);
+            stmt.setInt(3, studentId);
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
         }
     }
 }

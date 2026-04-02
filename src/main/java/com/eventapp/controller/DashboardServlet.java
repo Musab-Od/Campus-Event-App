@@ -2,6 +2,8 @@ package com.eventapp.controller;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -13,6 +15,7 @@ import jakarta.servlet.http.HttpSession;
 import com.eventapp.model.User;
 import com.eventapp.model.Event;
 import com.eventapp.dao.EventDAO;
+import com.eventapp.strategy.*;
 
 @WebServlet("/dashboard")
 public class DashboardServlet extends HttpServlet {
@@ -29,37 +32,61 @@ public class DashboardServlet extends HttpServlet {
         }
 
         User user = (User) session.getAttribute("user");
+        EventDAO eventDAO = new EventDAO();
+        List<Event> eventsToDisplay;
 
-        // 2. Route them to the correct view based on their role
+        // 2. Fetch the base list of events based on role
+        if ("ORGANIZER".equals(user.getRole())) {
+            eventsToDisplay = eventDAO.getEventsByOrganizer(user.getId());
+        } else {
+            eventsToDisplay = eventDAO.getAllOpenEvents();
+        }
+
+        // 3. CHECK FOR SEARCH PARAMETERS & APPLY STRATEGY
+        String filterType = request.getParameter("filterType");
+        String query = request.getParameter("query");
+
+        if (filterType != null && !filterType.isEmpty()) {
+            EventFilterStrategy strategy = null;
+
+            // Pick the right tool based on the dropdown menu
+            switch (filterType) {
+                case "title": strategy = new TitleFilterStrategy(); break;
+                case "department": strategy = new DepartmentFilterStrategy(); break;
+                case "category": strategy = new CategoryFilterStrategy(); break;
+                case "type": strategy = new TypeFilterStrategy(); break;
+                case "date": strategy = new DateFilterStrategy(); break;
+                case "availability": strategy = new AvailabilityFilterStrategy(); break;
+            }
+
+            // Filter the list if a valid strategy was picked
+            if (strategy != null) {
+                eventsToDisplay = strategy.filter(eventsToDisplay, query);
+            }
+        }
+
+        // 4. Route them to the correct view with the filtered data
         if ("ORGANIZER".equals(user.getRole())) {
             
-            // Fetch this organizer's events from the database
-            EventDAO eventDAO = new EventDAO();
-            List<Event> myEvents = eventDAO.getEventsByOrganizer(user.getId());
-            request.setAttribute("myEvents", myEvents);
-            
+            // We use your original attribute name "myEvents" so JSP doesn't break
+            request.setAttribute("myEvents", eventsToDisplay);
             request.getRequestDispatcher("/WEB-INF/views/dashboard-organizer.jsp").forward(request, response);
             
         } else if ("STUDENT".equals(user.getRole())) {
             
-            EventDAO eventDAO = new EventDAO();
-            
-            // 1. Fetch ALL open events
-            java.util.List<com.eventapp.model.Event> openEvents = eventDAO.getAllOpenEvents();
-            
-            // 2. Fetch the events this specific student has already booked
-            java.util.List<com.eventapp.model.Event> myTickets = eventDAO.getEventsByStudent(user.getId());
-            
-            // 3. Extract just the IDs into a Set so the JSP page can read them easily
-            java.util.Set<Integer> bookedIds = new java.util.HashSet<>();
-            for(com.eventapp.model.Event e : myTickets) {
+            // Fetch the events this specific student has already booked
+            List<Event> myTickets = eventDAO.getEventsByStudent(user.getId());
+            Set<Integer> bookedIds = new HashSet<>();
+            for(Event e : myTickets) {
                 bookedIds.add(e.getId());
             }
             
-            request.setAttribute("openEvents", openEvents);
+            // We use your original attribute name "openEvents" so JSP doesn't break
+            request.setAttribute("openEvents", eventsToDisplay); 
             request.setAttribute("bookedIds", bookedIds);
             
             request.getRequestDispatcher("/WEB-INF/views/dashboard-student.jsp").forward(request, response);
+            
         } else {
             response.sendRedirect(request.getContextPath() + "/login");
         }

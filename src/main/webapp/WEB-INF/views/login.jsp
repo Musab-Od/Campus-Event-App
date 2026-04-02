@@ -26,6 +26,9 @@
                     <% if("registered".equals(request.getParameter("success"))) { %>
                         <div class="alert alert-success">Registration successful! Please log in.</div>
                     <% } %>
+                    <% if("loggedout".equals(request.getParameter("success"))) { %>
+                        <div class="alert alert-info">You have been successfully logged out. See you next time!</div>
+                    <% } %>
 
                     <form action="${pageContext.request.contextPath}/login" method="POST">
                         <div class="mb-3">

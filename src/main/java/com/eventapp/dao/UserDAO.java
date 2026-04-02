@@ -68,4 +68,27 @@ public class UserDAO {
         
         return null; // Login failed or user is blocked
     }
+    // 3. UPDATE USER PROFILE
+    public boolean updateUser(User user) {
+        // We do NOT update the email to prevent login issues, but everything else is fair game!
+        String query = "UPDATE users SET name = ?, password = ?, faculty = ?, department = ?, admission_year = ? WHERE id = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+
+            stmt.setString(1, user.getName());
+            stmt.setString(2, user.getPassword());
+            stmt.setString(3, user.getFaculty());
+            stmt.setString(4, user.getDepartment());
+            stmt.setInt(5, user.getAdmissionYear());
+            stmt.setInt(6, user.getId());
+
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 }
